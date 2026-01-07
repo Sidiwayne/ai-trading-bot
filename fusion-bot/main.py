@@ -23,6 +23,7 @@ Usage:
 """
 
 import argparse
+import os
 import signal
 import sys
 import time
@@ -308,9 +309,10 @@ def main():
     if args.log_level:
         settings.log_level = args.log_level
     
-    # Setup logging
+    # Setup logging (use JSON format for Loki/Docker)
     log_level = "DEBUG" if args.verbose else settings.log_level
-    setup_logging(log_level=log_level, log_path=settings.log_path)
+    json_logs = os.environ.get("LOG_FORMAT", "").lower() == "json"
+    setup_logging(log_level=log_level, log_path=settings.log_path, json_logs=json_logs)
     logger = get_logger(__name__)
     
     # Setup signal handlers
@@ -323,18 +325,15 @@ def main():
     elif args.close_all:
         close_all_positions(settings)
     else:
-        # Safety check for live trading
+        # Log warning for live trading mode
         if settings.is_live_mode:
-            console.print(Panel.fit(
-                "[bold red]⚠️  LIVE TRADING MODE ⚠️[/bold red]\n\n"
-                "You are about to trade with REAL MONEY.\n"
-                "Make sure you understand the risks!",
-                border_style="red",
-            ))
-            confirm = input("Type 'I UNDERSTAND' to continue: ")
-            if confirm != "I UNDERSTAND":
-                console.print("Cancelled.")
-                return
+            logger.warning(
+                "⚠️ LIVE TRADING MODE - Trading with real money",
+                extra={
+                    "mode": "live",
+                    "warning": "Ensure proper risk management is configured"
+                }
+            )
         
         run_bot(settings, verbose=args.verbose)
 

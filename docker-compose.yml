@@ -1,0 +1,128 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# AI Trading Bot - Production Stack
+# ══════════════════════════════════════════════════════════════════════════════
+# Includes: FusionBot, PostgreSQL, Loki, Grafana
+#
+# Usage:
+#   docker compose up -d
+#
+# Access:
+#   - Grafana: http://localhost:3000 (admin/admin)
+#   - Adminer: http://localhost:8080
+# ══════════════════════════════════════════════════════════════════════════════
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # FusionBot - Trading Bot
+  # ─────────────────────────────────────────────────────────────────────────────
+  fusion-bot:
+    image: ghcr.io/sidiwayne/ai-trading-bot/fusion-bot:latest
+    container_name: fusion-bot
+    restart: unless-stopped
+    env_file:
+      - ./fusion-bot/.env
+    environment:
+      - DATABASE_URL=postgresql+psycopg://fusionbot:${POSTGRES_PASSWORD:-fusionbot_secret}@postgres:5432/fusionbot
+      - LOG_FORMAT=json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      loki:
+        condition: service_started
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        loki-batch-size: "100"
+        loki-retries: "2"
+        loki-timeout: "2s"
+        labels: "service"
+    labels:
+      - "service=fusion-bot"
+    networks:
+      - trading-net
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PostgreSQL Database
+  # ─────────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: trading-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fusionbot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fusionbot_secret}
+      POSTGRES_DB: fusionbot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fusionbot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trading-net
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Loki - Log Aggregation
+  # ─────────────────────────────────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: loki
+    restart: unless-stopped
+    ports:
+      - "5100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+    networks:
+      - trading-net
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Grafana - Visualization
+  # ─────────────────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "5000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - loki
+    networks:
+      - trading-net
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Adminer - Database UI (optional, remove in production)
+  # ─────────────────────────────────────────────────────────────────────────────
+  # adminer:
+  #   image: adminer:4
+  #   container_name: adminer
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     ADMINER_DEFAULT_SERVER: postgres
+  #   depends_on:
+  #     - postgres
+  #   networks:
+  #     - trading-net
+  #   profiles:
+  #     - debug
+
+networks:
+  trading-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  loki_data:
+  grafana_data:
+

@@ -36,16 +36,22 @@ def setup_logging(
     # Create handlers
     handlers = []
     
-    # Rich console handler for beautiful terminal output
-    console_handler = RichHandler(
-        console=Console(stderr=True),
-        show_time=True,
-        show_path=False,
-        rich_tracebacks=True,
-        tracebacks_show_locals=True,
-        markup=True,
-    )
-    console_handler.setLevel(level)
+    if json_logs:
+        # JSON console handler for Docker/Loki (structured logs)
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(level)
+        console_handler.setFormatter(logging.Formatter('%(message)s'))
+    else:
+        # Rich console handler for beautiful terminal output (local dev)
+        console_handler = RichHandler(
+            console=Console(stderr=True),
+            show_time=True,
+            show_path=False,
+            rich_tracebacks=True,
+            tracebacks_show_locals=True,
+            markup=True,
+        )
+        console_handler.setLevel(level)
     handlers.append(console_handler)
     
     # File handler if path specified
@@ -81,15 +87,21 @@ def setup_logging(
     )
     
     # Configure structlog
-    processors = [
+    shared_processors = [
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
     ]
     
+    if json_logs:
+        # JSON output for Loki/Docker
+        shared_processors.append(structlog.processors.JSONRenderer())
+    else:
+        # Pretty output for local dev
+        shared_processors.append(structlog.stdlib.ProcessorFormatter.wrap_for_formatter)
+    
     structlog.configure(
-        processors=processors,
+        processors=shared_processors,
         wrapper_class=structlog.stdlib.BoundLogger,
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),

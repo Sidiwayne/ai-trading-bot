@@ -152,9 +152,9 @@ class TradingError(FusionBotError):
 class PositionLimitError(TradingError):
     """Raised when max open positions limit reached."""
     
-    def __init__(self, current: int, maximum: int):
+    def __init__(self, current: int, maximum: int, message: str = "Maximum open positions reached"):
         super().__init__(
-            f"Maximum open positions reached",
+            message,
             {"current": current, "maximum": maximum}
         )
         self.current = current

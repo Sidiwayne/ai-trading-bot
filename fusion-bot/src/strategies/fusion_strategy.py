@@ -259,9 +259,12 @@ class FusionStrategy:
         opportunities = []
         rejected_count = 0
         
-        # Get current positions to avoid duplicates
+        # Get current positions to check per-symbol limits
         current_positions = self.position_manager.get_open_positions()
-        symbols_with_positions = {p.symbol for p in current_positions}
+        # Count positions per symbol
+        positions_per_symbol: dict[str, int] = {}
+        for pos in current_positions:
+            positions_per_symbol[pos.symbol] = positions_per_symbol.get(pos.symbol, 0) + 1
         
         # Get actionable news
         news_items = self.news_aggregator.get_actionable_news()
@@ -290,9 +293,12 @@ class FusionStrategy:
                 )
                 continue
             
-            if symbol in symbols_with_positions:
+            # Check per-symbol position limit
+            current_count = positions_per_symbol.get(symbol, 0)
+            if current_count >= self.settings.max_positions_per_symbol:
                 self.news_aggregator.mark_processed(
-                    news, NewsStatus.POSITION_EXISTS.value, f"Already have position in {symbol}"
+                    news, NewsStatus.POSITION_EXISTS.value, 
+                    f"Max positions per symbol reached: {current_count}/{self.settings.max_positions_per_symbol} for {symbol}"
                 )
                 continue
             
@@ -472,9 +478,10 @@ class FusionStrategy:
                 logger.info(f"Trade cooldown: {remaining:.1f} min remaining")
                 return []
             
+            # Early exit if total position limit reached (avoids unnecessary AI calls)
             current_positions = self.position_manager.get_open_positions()
-            if len(current_positions) >= self.settings.max_open_positions:
-                logger.debug("Position limit reached")
+            if len(current_positions) >= self.settings.max_total_positions:
+                logger.debug(f"Total position limit reached: {len(current_positions)}/{self.settings.max_total_positions}")
                 return []
             
             # Gather opportunities (applies PRE-AI hard limits)

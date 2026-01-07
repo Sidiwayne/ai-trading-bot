@@ -80,11 +80,17 @@ class Settings(BaseSettings):
         le=0.01,
         description="Trading fee rate for position sizing (0.001 = 0.1%)"
     )
-    max_open_positions: int = Field(
+    max_positions_per_symbol: int = Field(
         default=1,
         ge=1,
+        le=3,
+        description="Maximum open positions per symbol (allows diversification)"
+    )
+    max_total_positions: int = Field(
+        default=3,
+        ge=1,
         le=10,
-        description="Maximum concurrent open positions"
+        description="Maximum total positions across all symbols (safety cap)"
     )
     virtual_stop_loss_pct: float = Field(
         default=-0.02,
@@ -132,7 +138,7 @@ class Settings(BaseSettings):
     
     # === Watchlist ===
     watchlist: str = Field(
-        default="BTC/USDT,ETH/USDT",
+        default="BTC/USDT,ETH/USDT,SOL/USDT",
         description="Comma-separated trading pairs"
     )
     

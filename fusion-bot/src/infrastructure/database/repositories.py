@@ -188,8 +188,15 @@ class TradeRepository:
         ).first()
     
     def count_open(self) -> int:
-        """Count open positions."""
+        """Count open positions across all symbols."""
         return self.session.query(TradeORM).filter(
+            TradeORM.status.in_([TradeStatus.OPEN.value, TradeStatus.PENDING.value])
+        ).count()
+    
+    def count_open_by_symbol(self, symbol: str) -> int:
+        """Count open positions for a specific symbol."""
+        return self.session.query(TradeORM).filter(
+            TradeORM.symbol == symbol,
             TradeORM.status.in_([TradeStatus.OPEN.value, TradeStatus.PENDING.value])
         ).count()
     

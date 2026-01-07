@@ -62,7 +62,8 @@ class OrderExecutor:
         self.max_risk_per_trade = self.settings.max_risk_per_trade
         self.max_position_pct = self.settings.max_position_pct
         self.fee_rate = self.settings.trading_fee_rate
-        self.max_open_positions = self.settings.max_open_positions
+        self.max_positions_per_symbol = self.settings.max_positions_per_symbol
+        self.max_total_positions = self.settings.max_total_positions
         self.virtual_sl_pct = self.settings.virtual_stop_loss_pct
         self.virtual_tp_pct = self.settings.virtual_take_profit_pct
         self.catastrophe_sl_pct = self.settings.catastrophe_stop_loss_pct
@@ -72,17 +73,38 @@ class OrderExecutor:
             dry_run=self.dry_run,
             max_risk=self.max_risk_per_trade,
             max_position_pct=self.max_position_pct,
-            max_positions=self.max_open_positions,
+            max_per_symbol=self.max_positions_per_symbol,
+            max_total=self.max_total_positions,
         )
     
-    def _check_position_limit(self) -> None:
-        """Check if we can open another position."""
+    def _check_position_limit(self, symbol: str) -> None:
+        """
+        Check if we can open another position for this symbol.
+        
+        Checks both:
+        - Per-symbol limit (max positions in this specific symbol)
+        - Total limit (max positions across all symbols)
+        """
         with get_session() as session:
             repo = TradeRepository(session)
-            open_count = repo.count_open()
             
-            if open_count >= self.max_open_positions:
-                raise PositionLimitError(open_count, self.max_open_positions)
+            # Check per-symbol limit
+            symbol_count = repo.count_open_by_symbol(symbol)
+            if symbol_count >= self.max_positions_per_symbol:
+                raise PositionLimitError(
+                    symbol_count,
+                    self.max_positions_per_symbol,
+                    f"Max positions per symbol ({symbol}) reached"
+                )
+            
+            # Check total limit
+            total_count = repo.count_open()
+            if total_count >= self.max_total_positions:
+                raise PositionLimitError(
+                    total_count,
+                    self.max_total_positions,
+                    "Max total positions reached"
+                )
     
     def _get_available_balance(self) -> float:
         """Get available USDT balance."""
@@ -160,8 +182,8 @@ class OrderExecutor:
         )
         
         try:
-            # Check position limit
-            self._check_position_limit()
+            # Check position limit (per-symbol and total)
+            self._check_position_limit(symbol)
             
             # Get current price and balance
             ticker = self.exchange.get_ticker(symbol)

@@ -91,6 +91,7 @@ SUPPORTED_SYMBOLS: Dict[str, List[str]] = {
     "BTC/USDT": ["bitcoin", "btc", "₿"],
     "ETH/USDT": ["ethereum", "eth", "ether"],
     "SOL/USDT": ["solana", "sol"],
+    "SOL/USDT": ["solana", "sol"],
     "XRP/USDT": ["ripple", "xrp"],
     "ADA/USDT": ["cardano", "ada"],
     "AVAX/USDT": ["avalanche", "avax"],

@@ -1,0 +1,188 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# FusionBot Docker Compose
+# ══════════════════════════════════════════════════════════════════════════════
+# Three environments:
+#   - dry_run: Paper trading (100% simulated, no API calls)
+#   - testnet: Binance Testnet (real API, fake money)
+#   - prod: Live trading (real money, use with caution!)
+#
+# Usage:
+#   PAPER TRADING (start here):
+#     docker compose --profile dry_run up -d
+#
+#   TESTNET (validate API integration):
+#     docker compose --profile testnet up -d
+#
+#   PRODUCTION (real trading):
+#     docker compose --profile prod up -d
+#
+#   LOGS:
+#     docker compose logs -f fusionbot-dry-run
+#     docker compose logs -f fusionbot-testnet
+#     docker compose logs -f fusionbot-prod
+#
+#   STOP:
+#     docker compose down
+# ══════════════════════════════════════════════════════════════════════════════
+
+services:
+  # ════════════════════════════════════════════════════════════════════════════
+  # PostgreSQL Database (shared)
+  # ════════════════════════════════════════════════════════════════════════════
+  postgres:
+    image: postgres:16-alpine
+    container_name: fusionbot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fusionbot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fusionbot_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-fusionbot}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fusionbot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fusionbot-network
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # FusionBot - DRY RUN (Paper Trading)
+  # ════════════════════════════════════════════════════════════════════════════
+  # Safe testing mode - no real trades executed
+  # Uses Binance Testnet API
+  fusionbot-dry-run:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: fusionbot-dry-run
+    restart: unless-stopped
+    profiles:
+      - dry_run
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env.dry_run
+    environment:
+      # Override for dry run
+      TRADING_MODE: paper
+      BINANCE_TESTNET: "true"
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-fusionbot}:${POSTGRES_PASSWORD:-fusionbot_secret}@postgres:5432/${POSTGRES_DB:-fusionbot}_dry_run
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./data/dry_run:/app/data
+      - ./logs/dry_run:/app/logs
+    networks:
+      - fusionbot-network
+    labels:
+      - "com.fusionbot.env=dry_run"
+      - "com.fusionbot.description=Paper trading mode - no real money"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # FusionBot - TESTNET (Real API, Fake Money)
+  # ════════════════════════════════════════════════════════════════════════════
+  # Tests your Binance API integration without risking real money
+  # Get testnet keys from: https://testnet.binance.vision/
+  fusionbot-testnet:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: fusionbot-testnet
+    restart: unless-stopped
+    profiles:
+      - testnet
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env.testnet
+    environment:
+      # Testnet: real API, fake money
+      TRADING_MODE: live
+      BINANCE_TESTNET: "true"
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-fusionbot}:${POSTGRES_PASSWORD:-fusionbot_secret}@postgres:5432/${POSTGRES_DB:-fusionbot}_testnet
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./data/testnet:/app/data
+      - ./logs/testnet:/app/logs
+    networks:
+      - fusionbot-network
+    labels:
+      - "com.fusionbot.env=testnet"
+      - "com.fusionbot.description=Binance Testnet - real API, fake money"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # FusionBot - PRODUCTION (Live Trading)
+  # ════════════════════════════════════════════════════════════════════════════
+  # ⚠️  WARNING: This uses REAL money!
+  # Make sure you understand the risks before running
+  fusionbot-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: fusionbot-prod
+    restart: unless-stopped
+    profiles:
+      - prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env.prod
+    environment:
+      # Production overrides
+      TRADING_MODE: live
+      BINANCE_TESTNET: "false"
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-fusionbot}:${POSTGRES_PASSWORD:-fusionbot_secret}@postgres:5432/${POSTGRES_DB:-fusionbot}_prod
+      LOG_LEVEL: INFO
+    volumes:
+      - ./data/prod:/app/data
+      - ./logs/prod:/app/logs
+    networks:
+      - fusionbot-network
+    labels:
+      - "com.fusionbot.env=production"
+      - "com.fusionbot.description=Live trading - REAL MONEY"
+    # Extra security: read-only filesystem except for data/logs
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # Adminer - Database UI (optional, for debugging)
+  # ════════════════════════════════════════════════════════════════════════════
+  adminer:
+    image: adminer:latest
+    container_name: fusionbot-adminer
+    restart: unless-stopped
+    profiles:
+      - tools
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    networks:
+      - fusionbot-network
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Volumes
+# ══════════════════════════════════════════════════════════════════════════════
+volumes:
+  postgres_data:
+    driver: local
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Networks
+# ══════════════════════════════════════════════════════════════════════════════
+networks:
+  fusionbot-network:
+    driver: bridge
+

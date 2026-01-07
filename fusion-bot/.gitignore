@@ -1,0 +1,81 @@
+# ============================================
+# FusionBot .gitignore
+# ============================================
+
+# === Environment ===
+.env
+.env.local
+.env.*.local
+*.env
+env.*
+.env.*
+
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# === Virtual Environment ===
+venv/
+.venv/
+ENV/
+env/
+.env/
+
+# === IDE ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# === Logs ===
+logs/
+*.log
+
+# === Database ===
+*.db
+*.sqlite3
+data/*.db
+
+# === Testing ===
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+*.bak
+
+# === Secrets ===
+secrets/
+*.pem
+*.key
+
+# === Jupyter ===
+.ipynb_checkpoints/
+

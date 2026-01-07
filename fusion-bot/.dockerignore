@@ -1,0 +1,60 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# FusionBot Docker Ignore
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+.env
+.env.*
+!env.*.template
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.cursor/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Build
+*.egg-info/
+dist/
+build/
+
+# Data (mounted as volumes)
+data/
+logs/
+*.db
+*.sqlite
+
+# Documentation
+*.md
+!requirements.txt
+docs/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.docker/
+
+# Misc
+.DS_Store
+Thumbs.db
+*.log
+

@@ -20,9 +20,9 @@ services:
     container_name: fusion-bot
     restart: unless-stopped
     env_file:
-      - ./fusion-bot/.env
+      - env.testnet
     environment:
-      - DATABASE_URL=postgresql+psycopg://fusionbot:${POSTGRES_PASSWORD:-fusionbot_secret}@postgres:5432/fusionbot
+      - DATABASE_URL=postgresql+psycopg://fusionbot:${POSTGRES_PASSWORD}@postgres:5432/fusionbot
       - LOG_FORMAT=json
     depends_on:
       postgres:
@@ -32,7 +32,7 @@ services:
     logging:
       driver: loki
       options:
-        loki-url: "http://localhost:3100/loki/api/v1/push"
+        loki-url: "http://localhost:5100/loki/api/v1/push"
         loki-batch-size: "100"
         loki-retries: "2"
         loki-timeout: "2s"
@@ -51,7 +51,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: fusionbot
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fusionbot_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: fusionbot
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -67,7 +67,7 @@ services:
   # Loki - Log Aggregation
   # ─────────────────────────────────────────────────────────────────────────────
   loki:
-    image: grafana/loki:2.9.0
+    image: grafana/loki:latest
     container_name: loki
     restart: unless-stopped
     ports:
@@ -82,14 +82,14 @@ services:
   # Grafana - Visualization
   # ─────────────────────────────────────────────────────────────────────────────
   grafana:
-    image: grafana/grafana:10.2.0
+    image: grafana/grafana:latest
     container_name: grafana
     restart: unless-stopped
     ports:
       - "5000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana

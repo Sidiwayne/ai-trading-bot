@@ -25,7 +25,9 @@ from src.infrastructure.database.repositories import MacroEventRepository
 from src.config import get_settings
 from src.config.constants import MACRO_RSS_FEEDS
 from src.utils.logging import get_logger
+from src.utils.classification_cache import ClassificationCache
 from src.services.notifier import get_notifier
+from src.services.catastrophe_classifier import CatastropheClassifier
 
 logger = get_logger(__name__)
 
@@ -142,37 +144,107 @@ class MacroContext:
         self.settings = get_settings()
         self.rss_client = rss_client or RSSClient(cache_seconds=300)
         
+        # Initialize catastrophe classifier (eager loading - critical component)
+        try:
+            self.catastrophe_classifier = CatastropheClassifier()
+        except Exception as e:
+            logger.warning(
+                "Failed to initialize catastrophe classifier, will use keyword matching",
+                error=str(e),
+            )
+            self.catastrophe_classifier = None
+        
+        # Initialize classification cache (centralized cache manager)
+        self.cache = ClassificationCache(ttl_hours=2.0)  # Match recency filter
+        
         logger.info(
             "Macro context initialized",
             catastrophe_keywords=len(CATASTROPHE_KEYWORDS),
             context_keywords=len(MACRO_CONTEXT_KEYWORDS),
+            classifier_available=self.catastrophe_classifier is not None,
         )
     
-    def _check_for_catastrophe(self, headline: str) -> Optional[str]:
+    def _check_for_catastrophe(
+        self, headline: str, published_at: Optional[datetime] = None
+    ) -> Optional[str]:
         """
         Check if headline indicates a TRUE CATASTROPHE.
         
-        These are rare, obvious disasters where trading should stop.
-        Uses word boundary matching to avoid false positives.
+        Uses sentence transformer for semantic classification, with keyword matching as fallback.
+        Results are cached to avoid redundant model inference.
+        
+        Args:
+            headline: News headline to check
+            published_at: Publication timestamp (for recency filter)
         
         Returns:
             Matched catastrophe keyword if found, None otherwise
         """
-        headline_lower = headline.lower()
+        # Step 1: Recency filter - only check recent headlines (< 2 hours old)
+        if published_at:
+            age_hours = (datetime.now(timezone.utc) - published_at).total_seconds() / 3600
+            if age_hours > 2.0:
+                # Headline too old - skip check (don't cache)
+                return None
         
-        for keyword in CATASTROPHE_KEYWORDS:
-            pattern = r'\b' + re.escape(keyword) + r'\b'
-            if re.search(pattern, headline_lower):
-                return keyword
+        # Step 2: Check cache
+        is_cached, cached_result = self.cache.get_classification(headline)
+        if is_cached:
+            # Cache hit - return cached result (can be None if cached as "not catastrophe")
+            return cached_result
         
-        return None
+        # Step 3: Compute classification (not cached or expired)
+        result = None
+        
+        # Use sentence transformer classifier if available
+        if self.catastrophe_classifier:
+            is_catastrophe = self.catastrophe_classifier.is_catastrophe(headline)
+            if is_catastrophe:
+                # Classifier says it's a catastrophe - extract keyword for logging
+                headline_lower = headline.lower()
+                for keyword in CATASTROPHE_KEYWORDS:
+                    pattern = r'\b' + re.escape(keyword) + r'\b'
+                    if re.search(pattern, headline_lower):
+                        result = keyword
+                        break
+                # If classifier says catastrophe but no keyword match, return generic
+                if result is None:
+                    result = "catastrophe_detected"
+            # else: result stays None (not a catastrophe)
+        else:
+            # Fallback to keyword matching ONLY if classifier unavailable
+            headline_lower = headline.lower()
+            for keyword in CATASTROPHE_KEYWORDS:
+                pattern = r'\b' + re.escape(keyword) + r'\b'
+                if re.search(pattern, headline_lower):
+                    result = keyword
+                    break
+        
+        # Step 4: Cache the result
+        self.cache.set_classification(headline, result)
+        
+        return result
     
     def _extract_context_keywords(self, headline: str) -> List[str]:
         """
         Extract macro context keywords from headline.
         
         These are NOT automatic blocks - just context for AI.
+        Results are cached to avoid redundant regex matching.
+        
+        Args:
+            headline: News headline to extract keywords from
+        
+        Returns:
+            List of matched context keywords
         """
+        # Check cache
+        is_cached, cached_keywords = self.cache.get_context_keywords(headline)
+        if is_cached:
+            # Cache hit - return cached keywords (can be empty list)
+            return cached_keywords
+        
+        # Compute keywords (not cached or expired)
         headline_lower = headline.lower()
         found = []
         
@@ -180,6 +252,9 @@ class MacroContext:
             pattern = r'\b' + re.escape(keyword) + r'\b'
             if re.search(pattern, headline_lower):
                 found.append(keyword)
+        
+        # Cache the result
+        self.cache.set_context_keywords(headline, found)
         
         return found
     
@@ -190,6 +265,9 @@ class MacroContext:
         Returns:
             MacroClimate with headlines and catastrophe status
         """
+        # Periodic cleanup of expired cache entries
+        self.cache.cleanup_expired()
+        
         headlines = []
         is_catastrophe = False
         catastrophe_reason = None
@@ -200,11 +278,8 @@ class MacroContext:
             
             for item in macro_news:
                 # First check for catastrophe (code-level block)
-                catastrophe_match = self._check_for_catastrophe(item.title)
+                catastrophe_match = self._check_for_catastrophe(item.title, item.published_at)
                 if catastrophe_match:
-                    # TODO: Add recency filter - only trigger if headline < 2 hours old
-                    # This would prevent false positives from old news discussing past events
-                    # e.g., "Analyst recalls 2008 Lehman collapse" shouldn't trigger
                     is_catastrophe = True
                     catastrophe_reason = f"{catastrophe_match}: {item.title[:80]}"
                     logger.error(

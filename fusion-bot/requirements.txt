@@ -25,6 +25,10 @@ requests>=2.31.0
 # === AI (Gemini) ===
 google-genai>=1.0.0
 
+# === ML / Embeddings ===
+sentence-transformers>=2.2.0
+torch>=2.0.0
+
 # === Utilities ===
 tenacity>=8.2.0
 schedule>=1.2.0

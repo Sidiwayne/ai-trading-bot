@@ -225,12 +225,12 @@ class TradeRepository:
         
         # Calculate P&L (only if exit_price is known)
         if exit_price is not None:
-        if trade.side == "BUY":
-            pnl_amount = (exit_price - trade.entry_price) * trade.quantity
-        else:
-            pnl_amount = (trade.entry_price - exit_price) * trade.quantity
-        
-        pnl_percent = pnl_amount / (trade.entry_price * trade.quantity)
+            if trade.side == "BUY":
+                pnl_amount = (exit_price - trade.entry_price) * trade.quantity
+            else:
+                pnl_amount = (trade.entry_price - exit_price) * trade.quantity
+            
+            pnl_percent = pnl_amount / (trade.entry_price * trade.quantity)
         else:
             # Unknown exit price (e.g., EXTERNAL_CLOSE) - set PnL to None
             pnl_amount = None
@@ -248,19 +248,18 @@ class TradeRepository:
         self.session.flush()
         
         if exit_price is not None:
-        logger.info(
-            "Trade closed",
-            trade_id=trade_id,
-            exit_price=exit_price,
-            exit_reason=exit_reason.value,
-            pnl_percent=f"{pnl_percent:+.2%}",
-        )
-        else:
             logger.info(
-                "Trade closed with unknown exit price",
+                "Trade closed",
+                trade_id=trade_id,
+                exit_price=exit_price,
+                exit_reason=exit_reason.value,
+                pnl_percent=f"{pnl_percent:+.2%}",
+            )
+        else:
+            logger.warning(
+                "Trade closed with unknown exit price (external close)",
                 trade_id=trade_id,
                 exit_reason=exit_reason.value,
-                note="PnL set to None - requires investigation",
             )
         
         return trade

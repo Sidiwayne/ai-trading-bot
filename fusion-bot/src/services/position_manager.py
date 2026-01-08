@@ -167,81 +167,97 @@ class PositionManager:
         
         Detects if catastrophe stop was hit while bot was offline.
         
+        Strategy: Check stop order status FIRST (most reliable indicator).
+        - If stop order is "closed" → catastrophe stop was hit
+        - If stop order is "open" → check position balance
+        - If position missing but stop order open → external close
+        
         Args:
             position: Position to verify
         
         Returns:
             Tuple of (ExitReason, stop_order).
             - If catastrophe stop detected: (ExitReason.CATASTROPHE_SL, stop_order)
+            - If external close detected: (ExitReason.EXTERNAL_CLOSE, stop_order)
             - Otherwise: (None, None)
             The stop_order is included to avoid re-fetching it in the caller.
         """
         try:
-            # Check if we still hold the asset
-            exchange_position = self.exchange.get_position(position.symbol)
-            
-            # If position still exists, no catastrophe stop
-            if exchange_position is not None and exchange_position >= position.quantity * 0.9:
-                return (None, None)
-            
-            # Position is missing - check if stop-loss order still exists
+            # PRIORITY 1: Check stop order status FIRST (most reliable indicator)
             stop_order = None
             if position.exchange_stop_order_id:
                 try:
-                    # Check if stop-loss order still exists
                     stop_order = self.exchange.get_order(
                         position.symbol,
                         position.exchange_stop_order_id
                     )
                     
-                    if stop_order and stop_order.status == "open":
-                        # Position is missing but stop order is still open
-                        # This means position was sold EXTERNALLY (manual, compromise, or error)
-                        # Log for investigation - do not auto-close yet
-                        logger.error(
-                            "🔍 INVESTIGATION: Position sold externally but stop order still open",
+                    if stop_order:
+                        if stop_order.status == "closed":
+                            # Stop order was filled → catastrophe stop was hit
+                            logger.info(
+                                "Catastrophe stop detected - stop order was filled",
+                                trade_id=position.id,
+                                symbol=position.symbol,
+                                stop_order_id=position.exchange_stop_order_id,
+                                fill_price=stop_order.price,
+                                catastrophe_sl=position.catastrophe_sl,
+                            )
+                            return (ExitReason.CATASTROPHE_SL, stop_order)
+                        
+                        elif stop_order.status == "open":
+                            # Stop order is still open - check if position still exists
+                            # NOTE: get_position() returns TOTAL balance, not specific trade position
+                            # So we can't rely on it alone, but we use it as a sanity check
+                            exchange_position = self.exchange.get_position(position.symbol)
+                            
+                            if exchange_position is None or exchange_position < position.quantity * 0.9:
+                                # Position is missing but stop order is still open
+                                # This means position was sold EXTERNALLY (manual, compromise, or error)
+                                logger.error(
+                                    "🔍 INVESTIGATION: Position sold externally but stop order still open",
+                                    trade_id=position.id,
+                                    symbol=position.symbol,
+                                    expected_qty=position.quantity,
+                                    found_qty=exchange_position,
+                                    stop_order_id=position.exchange_stop_order_id,
+                                    entry_price=position.entry_price,
+                                    opened_at=position.opened_at.isoformat(),
+                                    note="Position may have been sold manually, via compromised API key, or exchange error. Requires manual investigation.",
+                                )
+                                return (ExitReason.EXTERNAL_CLOSE, stop_order)
+                            else:
+                                # Position exists and stop order is open → position is fine
+                                return (None, None)
+                        
+                        # Stop order status is "canceled" or other → investigate
+                        logger.warning(
+                            "Stop order has unexpected status",
                             trade_id=position.id,
-                            symbol=position.symbol,
-                            expected_qty=position.quantity,
-                            found_qty=exchange_position,
                             stop_order_id=position.exchange_stop_order_id,
-                            entry_price=position.entry_price,
-                            opened_at=position.opened_at.isoformat(),
-                            note="Position may have been sold manually, via compromised API key, or exchange error. Requires manual investigation.",
+                            status=stop_order.status,
                         )
-                        # Return EXTERNAL_CLOSE for logging/investigation
-                        return (ExitReason.EXTERNAL_CLOSE, stop_order)
+                
                 except Exception as e:
-                    logger.debug(
+                    logger.warning(
                         "Could not verify stop order status",
                         trade_id=position.id,
                         stop_order_id=position.exchange_stop_order_id,
                         error=str(e),
                     )
+                    # Cannot determine status without stop order check - return None
+                    return (None, None)
             
-            # Position is missing AND stop order is gone (or doesn't exist)
-            # This could be:
-            # 1. Catastrophe stop was hit (exit price ≈ catastrophe_sl)
-            # 2. Normal exit via virtual TP/SL (exit price ≠ catastrophe_sl)
-            # 3. Manual close
-            
-            # If position is missing and stop order is gone, it's likely a catastrophe stop
-            # BUT we should verify the exit price matches the catastrophe stop price
-            # Since we can't easily query trade history here, we'll log a warning
-            # and let the normal flow handle it if it was a virtual TP/SL
-            
-            logger.warning(
-                "Position missing from exchange - stop order also gone",
+            # No stop order ID available - cannot reliably determine position status
+            # get_position() returns TOTAL balance, not specific trade position
+            # So we cannot use it to detect if this specific trade's position exists
+            logger.debug(
+                "No stop order ID available - cannot verify position status",
                 trade_id=position.id,
                 symbol=position.symbol,
-                expected_qty=position.quantity,
-                found_qty=exchange_position,
-                catastrophe_sl=position.catastrophe_sl,
-                note="Assuming catastrophe stop - verify exit price matches catastrophe_sl",
+                note="Position status check requires stop order ID for reliable detection",
             )
-            
-            # Return CATASTROPHE_SL with the stop order (if available) to avoid re-fetching
-            return (ExitReason.CATASTROPHE_SL, stop_order)
+            return (None, None)
             
         except Exception as e:
             logger.error(

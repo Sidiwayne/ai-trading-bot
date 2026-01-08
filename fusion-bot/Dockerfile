@@ -37,7 +37,8 @@ RUN pip install --upgrade pip wheel && \
     find /opt/venv -type d -name "test" -exec rm -rf {} + 2>/dev/null || true && \
     find /opt/venv -type d -name "__tests__" -exec rm -rf {} + 2>/dev/null || true && \
     find /opt/venv -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true && \
-    find /opt/venv -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true && \
+    # NOTE: Keep *.dist-info directories - they contain package metadata required by importlib.metadata
+    # Removing them breaks version checks (e.g., transformers checking for tqdm>=4.27)
     # Remove unnecessary PyTorch CUDA files (we only need CPU)
     find /opt/venv -path "*/torch/cuda*" -exec rm -rf {} + 2>/dev/null || true && \
     find /opt/venv -name "*cuda*" -type f -delete 2>/dev/null || true && \

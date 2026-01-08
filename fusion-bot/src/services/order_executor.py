@@ -22,6 +22,7 @@ from src.infrastructure.database.repositories import TradeRepository
 from src.config import get_settings
 from src.utils.logging import get_logger, trade_logger
 from src.utils.helpers import calculate_position_size
+from src.services.notifier import get_notifier
 
 logger = get_logger(__name__)
 
@@ -264,6 +265,16 @@ class OrderExecutor:
                     news_id=entry.news_id,
                     reasoning=decision.reasoning,
                 )
+                
+                # Send Telegram notification
+                notifier = get_notifier()
+                if notifier:
+                    notifier.send_trade_opened(
+                        symbol=symbol,
+                        quantity=buy_result.quantity,
+                        entry_price=buy_result.price,
+                        trade_id=trade.id,
+                    )
             
             trade_logger.log_entry(
                 symbol=symbol,

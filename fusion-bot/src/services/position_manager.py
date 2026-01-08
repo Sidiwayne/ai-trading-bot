@@ -17,6 +17,7 @@ from src.infrastructure.database.repositories import TradeRepository
 from src.infrastructure.database.models import TradeORM
 from src.config import get_settings
 from src.utils.logging import get_logger, trade_logger
+from src.services.notifier import get_notifier
 
 logger = get_logger(__name__)
 
@@ -293,6 +294,36 @@ class PositionManager:
                     pnl_percent=trade.pnl_percent,
                     reason=str(reason),
                 )
+                
+                # Send Telegram notification
+                notifier = get_notifier()
+                if notifier:
+                    if reason == ExitReason.EXTERNAL_CLOSE:
+                        notifier.send_external_close(
+                            symbol=position.symbol,
+                            quantity=position.quantity,
+                            entry_price=position.entry_price,
+                            trade_id=position.id,
+                        )
+                    elif reason == ExitReason.CATASTROPHE_SL and trade.pnl_percent is not None:
+                        notifier.send_catastrophe_stop(
+                            symbol=position.symbol,
+                            entry_price=position.entry_price,
+                            exit_price=exit_price or position.catastrophe_sl,
+                            pnl_percent=trade.pnl_percent,
+                            trade_id=position.id,
+                        )
+                    else:
+                        # Regular position close (TP/SL/Time Decay)
+                        notifier.send_trade_closed(
+                            symbol=position.symbol,
+                            quantity=position.quantity,
+                            entry_price=position.entry_price,
+                            exit_price=exit_price,
+                            pnl_percent=trade.pnl_percent,
+                            reason=str(reason),
+                            trade_id=position.id,
+                        )
                 
         except Exception as e:
             logger.error(

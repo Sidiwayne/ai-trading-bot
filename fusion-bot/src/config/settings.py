@@ -230,6 +230,16 @@ class Settings(BaseSettings):
     def is_live_mode(self) -> bool:
         """Check if running in live trading mode."""
         return self.trading_mode == "live"
+    
+    # === Notifications ===
+    telegram_bot_token: str = Field(
+        default="",
+        description="Telegram bot token from @BotFather"
+    )
+    telegram_chat_id: str = Field(
+        default="",
+        description="Telegram chat ID to send notifications to"
+    )
 
 
 @lru_cache()

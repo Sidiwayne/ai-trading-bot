@@ -43,15 +43,15 @@ def setup_logging(
         console_handler.setFormatter(logging.Formatter('%(message)s'))
     else:
         # Rich console handler for beautiful terminal output (local dev)
-        console_handler = RichHandler(
-            console=Console(stderr=True),
-            show_time=True,
-            show_path=False,
-            rich_tracebacks=True,
-            tracebacks_show_locals=True,
-            markup=True,
-        )
-        console_handler.setLevel(level)
+    console_handler = RichHandler(
+        console=Console(stderr=True),
+        show_time=True,
+        show_path=False,
+        rich_tracebacks=True,
+        tracebacks_show_locals=True,
+        markup=True,
+    )
+    console_handler.setLevel(level)
     handlers.append(console_handler)
     
     # File handler if path specified

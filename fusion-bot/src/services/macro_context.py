@@ -25,6 +25,7 @@ from src.infrastructure.database.repositories import MacroEventRepository
 from src.config import get_settings
 from src.config.constants import MACRO_RSS_FEEDS
 from src.utils.logging import get_logger
+from src.services.notifier import get_notifier
 
 logger = get_logger(__name__)
 
@@ -262,6 +263,18 @@ class MacroContext:
             keyword=keyword,
             headline=headline[:80],
         )
+        
+        # Send Telegram notification
+        notifier = get_notifier()
+        if notifier:
+            notifier.send(
+                f"<b>🚨 Macro Catastrophe Detected</b>\n"
+                f"Keyword: <code>{keyword}</code>\n"
+                f"Headline: {headline[:200]}\n"
+                f"Source: {source}\n"
+                f"\n⚠️ Trading blocked for 4 hours.",
+                priority="CRITICAL"
+            )
     
     def get_status(self) -> dict:
         """Get current macro context status."""

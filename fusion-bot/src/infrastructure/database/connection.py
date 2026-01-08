@@ -16,7 +16,6 @@ from sqlalchemy.pool import QueuePool
 from src.config import get_settings
 from src.utils.logging import get_logger
 from src.infrastructure.database.models import Base
-from src.services.notifier import get_notifier
 
 logger = get_logger(__name__)
 
@@ -102,7 +101,8 @@ class DatabaseManager:
             return True
         except Exception as e:
             logger.error("Database health check failed", error=str(e))
-            # Send notification for database connection failure
+            # Send notification for database connection failure (lazy import to avoid circular dependency)
+            from src.services.notifier import get_notifier
             notifier = get_notifier()
             if notifier:
                 notifier.send_system_failure(
@@ -133,7 +133,8 @@ class DatabaseManager:
         except Exception as e:
             session.rollback()
             logger.error("Database session error, rolling back", error=str(e))
-            # Send notification for critical database errors
+            # Send notification for critical database errors (lazy import to avoid circular dependency)
+            from src.services.notifier import get_notifier
             notifier = get_notifier()
             if notifier:
                 notifier.send_system_failure(
@@ -184,7 +185,8 @@ def get_db_manager() -> DatabaseManager:
             _db_manager.init_db()
         except Exception as e:
             logger.error("Failed to initialize database", error=str(e))
-            # Send notification for database initialization failure
+            # Send notification for database initialization failure (lazy import to avoid circular dependency)
+            from src.services.notifier import get_notifier
             notifier = get_notifier()
             if notifier:
                 notifier.send_system_failure(

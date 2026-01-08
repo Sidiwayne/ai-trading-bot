@@ -21,6 +21,7 @@ from src.core.exceptions import NewsParsingError
 from src.utils.logging import get_logger
 from src.utils.helpers import generate_news_id, parse_rss_date, extract_symbol_from_text
 from src.config.constants import RSS_FEEDS, MACRO_RSS_FEEDS, SUPPORTED_SYMBOLS
+from src.services.notifier import get_notifier
 
 logger = get_logger(__name__)
 
@@ -178,6 +179,13 @@ class RSSClient:
                 url=url,
                 error=str(e),
             )
+            # Send notification for RSS feed failures (critical for news-driven bot)
+            notifier = get_notifier()
+            if notifier:
+                notifier.send_system_failure(
+                    component=f"RSS Feed ({source})",
+                    error=f"Failed to fetch: {str(e)[:200]}",
+                )
             return RSSFeedResult(
                 source=source,
                 items=[],
@@ -190,6 +198,13 @@ class RSSClient:
                 source=source,
                 error=str(e),
             )
+            # Send notification for unexpected RSS errors
+            notifier = get_notifier()
+            if notifier:
+                notifier.send_system_failure(
+                    component=f"RSS Feed ({source})",
+                    error=f"Unexpected error: {str(e)[:200]}",
+                )
             return RSSFeedResult(
                 source=source,
                 items=[],

@@ -25,6 +25,7 @@ from src.core.enums import TradeAction
 from src.core.exceptions import AIAnalysisError
 from src.config import get_settings
 from src.utils.logging import get_logger
+from src.services.notifier import get_notifier
 
 logger = get_logger(__name__)
 
@@ -388,6 +389,13 @@ class TradingBrain:
             
         except Exception as e:
             logger.error(f"AI evaluation failed: {e}")
+            # Send notification for AI service failure
+            notifier = get_notifier()
+            if notifier:
+                notifier.send_system_failure(
+                    component="AI Service (TradingBrain)",
+                    error=f"Evaluation failed: {str(e)[:200]}",
+                )
             return TradingDecision(
                 action=TradeAction.WAIT,
                 symbol=None,
@@ -418,4 +426,11 @@ class TradingBrain:
             return bool(response.text)
         except Exception as e:
             logger.error(f"AI connection test failed: {e}")
+            # Send notification for AI connection failure
+            notifier = get_notifier()
+            if notifier:
+                notifier.send_system_failure(
+                    component="AI Service (Connection Test)",
+                    error=f"Connection test failed: {str(e)[:200]}",
+                )
             return False

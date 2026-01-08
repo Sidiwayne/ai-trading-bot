@@ -27,6 +27,7 @@ from src.core.exceptions import (
 from src.config import get_settings
 from src.utils.logging import get_logger
 from src.utils.retry import with_retry, RetryConfig
+from src.services.notifier import get_notifier
 
 logger = get_logger(__name__)
 
@@ -96,21 +97,61 @@ class BinanceClient(ExchangeInterface):
             )
         except Exception as e:
             logger.error("Failed to load Binance markets", error=str(e))
+            # Send notification for exchange connection failure
+            notifier = get_notifier()
+            if notifier:
+                notifier.send_exchange_error(
+                    operation="Initialize Binance Client",
+                    error=f"Failed to load markets: {str(e)[:200]}",
+                )
             raise ExchangeConnectionError(f"Failed to connect to Binance: {e}")
     
     def _handle_error(self, e: Exception, operation: str) -> None:
         """Convert CCXT exceptions to our exceptions."""
         error_str = str(e)
+        notifier = get_notifier()
         
         if isinstance(e, ccxt.InsufficientFunds):
             raise InsufficientBalanceError(0, 0, "USDT")
         elif isinstance(e, ccxt.RateLimitExceeded):
+            # Send notification for rate limit errors
+            if notifier:
+                notifier.send_exchange_error(
+                    operation=operation,
+                    error=f"Rate limit exceeded: {error_str[:200]}",
+                )
             raise RateLimitError()
         elif isinstance(e, ccxt.NetworkError):
+            # Send notification for network errors
+            if notifier:
+                notifier.send_exchange_error(
+                    operation=operation,
+                    error=f"Network error: {error_str[:200]}",
+                )
             raise ExchangeConnectionError(f"{operation} failed: {error_str}")
+        elif isinstance(e, ccxt.AuthenticationError):
+            # Send notification for authentication failures (critical)
+            if notifier:
+                notifier.send_exchange_error(
+                    operation=operation,
+                    error=f"Authentication failed: {error_str[:200]}",
+                )
+            raise ExchangeError(f"{operation} failed: Authentication error")
         elif isinstance(e, ccxt.ExchangeError):
+            # Send notification for general exchange errors
+            if notifier:
+                notifier.send_exchange_error(
+                    operation=operation,
+                    error=f"Exchange error: {error_str[:200]}",
+                )
             raise ExchangeError(f"{operation} failed: {error_str}")
         else:
+            # Send notification for unexpected errors
+            if notifier:
+                notifier.send_exchange_error(
+                    operation=operation,
+                    error=f"Unexpected error: {error_str[:200]}",
+                )
             raise ExchangeError(f"Unexpected error in {operation}: {error_str}")
     
     @with_retry(RetryConfig(max_attempts=3))

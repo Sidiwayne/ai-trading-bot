@@ -16,6 +16,7 @@ from sqlalchemy.pool import QueuePool
 from src.config import get_settings
 from src.utils.logging import get_logger
 from src.infrastructure.database.models import Base
+from src.services.notifier import get_notifier
 
 logger = get_logger(__name__)
 
@@ -101,6 +102,13 @@ class DatabaseManager:
             return True
         except Exception as e:
             logger.error("Database health check failed", error=str(e))
+            # Send notification for database connection failure
+            notifier = get_notifier()
+            if notifier:
+                notifier.send_system_failure(
+                    component="Database",
+                    error=f"Health check failed: {str(e)}",
+                )
             return False
     
     @contextmanager
@@ -125,6 +133,13 @@ class DatabaseManager:
         except Exception as e:
             session.rollback()
             logger.error("Database session error, rolling back", error=str(e))
+            # Send notification for critical database errors
+            notifier = get_notifier()
+            if notifier:
+                notifier.send_system_failure(
+                    component="Database Session",
+                    error=f"Session error: {str(e)[:200]}",
+                )
             raise
         finally:
             session.close()
@@ -164,8 +179,19 @@ def get_db_manager() -> DatabaseManager:
     
     if _db_manager is None:
         settings = get_settings()
-        _db_manager = DatabaseManager(settings.database_url)
-        _db_manager.init_db()
+        try:
+            _db_manager = DatabaseManager(settings.database_url)
+            _db_manager.init_db()
+        except Exception as e:
+            logger.error("Failed to initialize database", error=str(e))
+            # Send notification for database initialization failure
+            notifier = get_notifier()
+            if notifier:
+                notifier.send_system_failure(
+                    component="Database Initialization",
+                    error=f"Failed to initialize: {str(e)[:200]}",
+                )
+            raise
     
     return _db_manager
 

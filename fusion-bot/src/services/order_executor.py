@@ -107,9 +107,20 @@ class OrderExecutor:
                     "Max total positions reached"
                 )
     
-    def _get_available_balance(self) -> float:
-        """Get available USDT balance."""
-        balance = self.exchange.get_balance("USDT")
+    def _get_available_balance(self, symbol: str) -> float:
+        """
+        Get available balance for the quote currency of the symbol.
+        
+        Args:
+            symbol: Trading pair (e.g., "BTC/USDC" → extracts "USDC")
+        
+        Returns:
+            Available balance in quote currency
+        """
+        # Extract quote currency from symbol (e.g., "BTC/USDC" → "USDC")
+        quote_currency = symbol.split("/")[1] if "/" in symbol else "USDC"
+        
+        balance = self.exchange.get_balance(quote_currency)
         return balance.free
     
     def _calculate_entry(
@@ -189,7 +200,7 @@ class OrderExecutor:
             # Get current price and balance
             ticker = self.exchange.get_ticker(symbol)
             current_price = ticker.last
-            available_balance = self._get_available_balance()
+            available_balance = self._get_available_balance(symbol)
             
             logger.info(
                 "Entry parameters",

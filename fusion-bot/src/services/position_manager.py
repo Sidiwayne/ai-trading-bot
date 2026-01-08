@@ -11,7 +11,7 @@ from typing import List, Optional, Tuple
 
 from src.core.models import Position
 from src.core.enums import TradeStatus, TradeSide, ExitReason
-from src.infrastructure.exchange.base import ExchangeInterface
+from src.infrastructure.exchange.base import ExchangeInterface, OrderResult
 from src.infrastructure.database import get_session
 from src.infrastructure.database.repositories import TradeRepository
 from src.infrastructure.database.models import TradeORM
@@ -160,7 +160,7 @@ class PositionManager:
         
         return is_zombie
     
-    def sync_with_exchange(self, position: Position) -> Optional[ExitReason]:
+    def sync_with_exchange(self, position: Position) -> Tuple[Optional[ExitReason], Optional[OrderResult]]:
         """
         Check if position still exists on exchange.
         
@@ -170,24 +170,77 @@ class PositionManager:
             position: Position to verify
         
         Returns:
-            ExitReason.CATASTROPHE_SL if stop was hit, None otherwise
+            Tuple of (ExitReason, stop_order).
+            - If catastrophe stop detected: (ExitReason.CATASTROPHE_SL, stop_order)
+            - Otherwise: (None, None)
+            The stop_order is included to avoid re-fetching it in the caller.
         """
         try:
             # Check if we still hold the asset
             exchange_position = self.exchange.get_position(position.symbol)
             
-            if exchange_position is None or exchange_position < position.quantity * 0.9:
-                # Position is gone or significantly reduced
-                logger.warning(
-                    "Position missing from exchange - likely catastrophe stop hit",
-                    trade_id=position.id,
-                    symbol=position.symbol,
-                    expected_qty=position.quantity,
-                    found_qty=exchange_position,
-                )
-                return ExitReason.CATASTROPHE_SL
+            # If position still exists, no catastrophe stop
+            if exchange_position is not None and exchange_position >= position.quantity * 0.9:
+                return (None, None)
             
-            return None
+            # Position is missing - check if stop-loss order still exists
+            stop_order = None
+            if position.exchange_stop_order_id:
+                try:
+                    # Check if stop-loss order still exists
+                    stop_order = self.exchange.get_order(
+                        position.symbol,
+                        position.exchange_stop_order_id
+                    )
+                    
+                    if stop_order and stop_order.status == "open":
+                        # Position is missing but stop order is still open
+                        # This means position was sold EXTERNALLY (manual, compromise, or error)
+                        # Log for investigation - do not auto-close yet
+                        logger.error(
+                            "🔍 INVESTIGATION: Position sold externally but stop order still open",
+                            trade_id=position.id,
+                            symbol=position.symbol,
+                            expected_qty=position.quantity,
+                            found_qty=exchange_position,
+                            stop_order_id=position.exchange_stop_order_id,
+                            entry_price=position.entry_price,
+                            opened_at=position.opened_at.isoformat(),
+                            note="Position may have been sold manually, via compromised API key, or exchange error. Requires manual investigation.",
+                        )
+                        # Return EXTERNAL_CLOSE for logging/investigation
+                        return (ExitReason.EXTERNAL_CLOSE, stop_order)
+                except Exception as e:
+                    logger.debug(
+                        "Could not verify stop order status",
+                        trade_id=position.id,
+                        stop_order_id=position.exchange_stop_order_id,
+                        error=str(e),
+                    )
+            
+            # Position is missing AND stop order is gone (or doesn't exist)
+            # This could be:
+            # 1. Catastrophe stop was hit (exit price ≈ catastrophe_sl)
+            # 2. Normal exit via virtual TP/SL (exit price ≠ catastrophe_sl)
+            # 3. Manual close
+            
+            # If position is missing and stop order is gone, it's likely a catastrophe stop
+            # BUT we should verify the exit price matches the catastrophe stop price
+            # Since we can't easily query trade history here, we'll log a warning
+            # and let the normal flow handle it if it was a virtual TP/SL
+            
+            logger.warning(
+                "Position missing from exchange - stop order also gone",
+                trade_id=position.id,
+                symbol=position.symbol,
+                expected_qty=position.quantity,
+                found_qty=exchange_position,
+                catastrophe_sl=position.catastrophe_sl,
+                note="Assuming catastrophe stop - verify exit price matches catastrophe_sl",
+            )
+            
+            # Return CATASTROPHE_SL with the stop order (if available) to avoid re-fetching
+            return (ExitReason.CATASTROPHE_SL, stop_order)
             
         except Exception as e:
             logger.error(
@@ -195,13 +248,13 @@ class PositionManager:
                 trade_id=position.id,
                 error=str(e),
             )
-            return None
+            return (None, None)
     
     def close_position(
         self,
         position: Position,
         reason: ExitReason,
-        exit_price: float = None,
+        exit_price: Optional[float] = None,
     ) -> None:
         """
         Close a position and update database.
@@ -209,15 +262,17 @@ class PositionManager:
         Args:
             position: Position to close
             reason: Reason for closing
-            exit_price: Target exit price (for consistent TP/SL execution)
+            exit_price: Target exit price (None for unknown exits like EXTERNAL_CLOSE)
         """
         try:
-            # Always execute exit (handles stop cancellation, selling)
-            # Pass exit_price for consistent execution at trigger price
-            actual_exit_price = self.order_executor.execute_exit(
-                position, str(reason), at_price=exit_price
-            )
-            exit_price = actual_exit_price
+            # Skip execute_exit for EXTERNAL_CLOSE (position already sold externally)
+            if reason != ExitReason.EXTERNAL_CLOSE:
+                # Always execute exit (handles stop cancellation, selling)
+                # Pass exit_price for consistent execution at trigger price
+                actual_exit_price = self.order_executor.execute_exit(
+                    position, str(reason), at_price=exit_price
+                )
+                exit_price = actual_exit_price
             
             # Update database
             with get_session() as session:
@@ -254,11 +309,51 @@ class PositionManager:
         Args:
             position: Position to check
         """
-        # Priority 1: Sync with exchange (detect catastrophe stop)
-        sync_reason = self.sync_with_exchange(position)
+        # Priority 1: Sync with exchange (detect catastrophe stop or external close)
+        sync_reason, stop_order = self.sync_with_exchange(position)
         if sync_reason:
-            # Catastrophe stop was hit - estimate exit price
-            exit_price = position.catastrophe_sl
+            # Handle EXTERNAL_CLOSE separately - close position to free limit, but mark for investigation
+            if sync_reason == ExitReason.EXTERNAL_CLOSE:
+                # Position was sold externally - close it to free position limit
+                # Cancel orphaned stop order first
+                if position.exchange_stop_order_id:
+                    try:
+                        self.exchange.cancel_order(position.symbol, position.exchange_stop_order_id)
+                        logger.info(
+                            "Cancelled orphaned stop order after external close",
+                            trade_id=position.id,
+                            stop_order_id=position.exchange_stop_order_id,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to cancel orphaned stop order",
+                            trade_id=position.id,
+                            stop_order_id=position.exchange_stop_order_id,
+                            error=str(e),
+                        )
+                
+                # Close position with None exit_price and PnL (unknown)
+                # This frees the position limit while preserving investigation trail
+                self.close_position(position, sync_reason, exit_price=None)
+                return
+            
+            # Catastrophe stop was hit - try to get actual exit price from stop order
+            exit_price = position.catastrophe_sl  # Default to catastrophe SL price
+            
+            # Use the stop order returned from sync_with_exchange (avoid re-fetching)
+            # If stop order was filled, use the actual fill price
+            if stop_order and stop_order.status == "closed":
+                exit_price = stop_order.price
+                logger.info(
+                    "Catastrophe stop filled - using actual exit price",
+                    trade_id=position.id,
+                    stop_order_id=position.exchange_stop_order_id,
+                    exit_price=exit_price,
+                    catastrophe_sl=position.catastrophe_sl,
+                )
+            # Note: If stop_order.status == "open", sync_with_exchange() would have returned (None, None)
+            # so we'd never reach this code. Only "closed" or None are possible here.
+            
             self.close_position(position, sync_reason, exit_price)
             return
         

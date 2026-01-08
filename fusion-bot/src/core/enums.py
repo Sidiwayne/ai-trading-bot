@@ -54,6 +54,7 @@ class ExitReason(str, Enum):
     SIGNAL = "SIGNAL"                   # Opposite signal received
     DEFENSIVE_MODE = "DEFENSIVE_MODE"   # Closed due to macro risk
     SYNC_MISSING = "SYNC_MISSING"       # Position not found on exchange
+    EXTERNAL_CLOSE = "EXTERNAL_CLOSE"   # Position sold externally (manual/compromise) - stop order still open
     
     def __str__(self) -> str:
         return self.value

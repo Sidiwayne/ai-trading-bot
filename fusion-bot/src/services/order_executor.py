@@ -334,8 +334,30 @@ class OrderExecutor:
             )
             return price
         
-        # Cancel the catastrophe stop order first
+        # Check if catastrophe stop was already filled (position already sold)
+        stop_order_already_filled = False
         if position.exchange_stop_order_id:
+            try:
+                stop_order = self.exchange.get_order(symbol, position.exchange_stop_order_id)
+                if stop_order and stop_order.status == "closed":
+                    # Stop order was already filled - position is already sold
+                    stop_order_already_filled = True
+                    logger.info(
+                        "Catastrophe stop already filled - position already sold",
+                        order_id=position.exchange_stop_order_id,
+                        fill_price=stop_order.price,
+                    )
+                    # Return the fill price from the stop order
+                    return stop_order.price
+            except Exception as e:
+                logger.warning(
+                    "Could not check stop order status - proceeding with manual exit",
+                    order_id=position.exchange_stop_order_id,
+                    error=str(e),
+                )
+        
+        # Only cancel and sell if stop order wasn't already filled
+        if position.exchange_stop_order_id and not stop_order_already_filled:
             try:
                 self.exchange.cancel_order(symbol, position.exchange_stop_order_id)
                 logger.info(

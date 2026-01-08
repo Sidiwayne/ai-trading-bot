@@ -203,7 +203,7 @@ class TradeRepository:
     def close_trade(
         self,
         trade_id: int,
-        exit_price: float,
+        exit_price: Optional[float],
         exit_reason: ExitReason,
         exit_order_id: Optional[str] = None,
     ) -> TradeORM:
@@ -212,7 +212,7 @@ class TradeRepository:
         
         Args:
             trade_id: Trade to close
-            exit_price: Exit fill price
+            exit_price: Exit fill price (None for unknown exits like EXTERNAL_CLOSE)
             exit_reason: Why the trade was closed
             exit_order_id: Exchange order ID for exit
         
@@ -223,13 +223,18 @@ class TradeRepository:
         if not trade:
             raise RecordNotFoundError("trades", str(trade_id))
         
-        # Calculate P&L
-        if trade.side == "BUY":
-            pnl_amount = (exit_price - trade.entry_price) * trade.quantity
+        # Calculate P&L (only if exit_price is known)
+        if exit_price is not None:
+            if trade.side == "BUY":
+                pnl_amount = (exit_price - trade.entry_price) * trade.quantity
+            else:
+                pnl_amount = (trade.entry_price - exit_price) * trade.quantity
+            
+            pnl_percent = pnl_amount / (trade.entry_price * trade.quantity)
         else:
-            pnl_amount = (trade.entry_price - exit_price) * trade.quantity
-        
-        pnl_percent = pnl_amount / (trade.entry_price * trade.quantity)
+            # Unknown exit price (e.g., EXTERNAL_CLOSE) - set PnL to None
+            pnl_amount = None
+            pnl_percent = None
         
         # Update trade
         trade.status = TradeStatus.CLOSED.value
@@ -242,13 +247,21 @@ class TradeRepository:
         
         self.session.flush()
         
-        logger.info(
-            "Trade closed",
-            trade_id=trade_id,
-            exit_price=exit_price,
-            exit_reason=exit_reason.value,
-            pnl_percent=f"{pnl_percent:+.2%}",
-        )
+        if exit_price is not None:
+            logger.info(
+                "Trade closed",
+                trade_id=trade_id,
+                exit_price=exit_price,
+                exit_reason=exit_reason.value,
+                pnl_percent=f"{pnl_percent:+.2%}",
+            )
+        else:
+            logger.info(
+                "Trade closed with unknown exit price",
+                trade_id=trade_id,
+                exit_reason=exit_reason.value,
+                note="PnL set to None - requires investigation",
+            )
         
         return trade
     

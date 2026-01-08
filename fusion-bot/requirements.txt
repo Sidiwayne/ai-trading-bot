@@ -26,8 +26,10 @@ requests>=2.31.0
 google-genai>=1.0.0
 
 # === ML / Embeddings ===
+# Use CPU-only PyTorch to reduce image size (sentence-transformers works fine with CPU)
 sentence-transformers>=2.2.0
-torch>=2.0.0
+torch>=2.0.0,<3.0.0
+# Note: Installing torch separately with CPU-only variant in Dockerfile
 
 # === Utilities ===
 tenacity>=8.2.0

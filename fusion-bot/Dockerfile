@@ -21,10 +21,37 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt /tmp/
+# Install PyTorch CPU-only (sentence-transformers only needs torch, not torchvision/torchaudio)
+# CPU-only PyTorch is ~800MB vs ~2GB for full PyTorch with CUDA
 RUN pip install --upgrade pip wheel && \
-    pip install -r /tmp/requirements.txt && \
+    pip install torch --index-url https://download.pytorch.org/whl/cpu && \
+    # Create requirements without torch (already installed)
+    grep -v "^torch" /tmp/requirements.txt | grep -v "^#" | grep -v "^$" > /tmp/requirements_no_torch.txt && \
+    pip install -r /tmp/requirements_no_torch.txt && \
+    # Aggressive cleanup to reduce image size
     find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true && \
-    find /opt/venv -type f -name "*.pyc" -delete 2>/dev/null || true
+    find /opt/venv -type f -name "*.pyc" -delete 2>/dev/null || true && \
+    find /opt/venv -type f -name "*.pyo" -delete 2>/dev/null || true && \
+    # Remove test files and docs from packages
+    find /opt/venv -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true && \
+    find /opt/venv -type d -name "test" -exec rm -rf {} + 2>/dev/null || true && \
+    find /opt/venv -type d -name "__tests__" -exec rm -rf {} + 2>/dev/null || true && \
+    find /opt/venv -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true && \
+    find /opt/venv -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true && \
+    # Remove unnecessary PyTorch CUDA files (we only need CPU)
+    find /opt/venv -path "*/torch/cuda*" -exec rm -rf {} + 2>/dev/null || true && \
+    find /opt/venv -name "*cuda*" -type f -delete 2>/dev/null || true && \
+    find /opt/venv -name "*nccl*" -type f -delete 2>/dev/null || true && \
+    # Remove sentence-transformers cache and unnecessary models
+    rm -rf /opt/venv/lib/python3.13/site-packages/sentence_transformers/cache 2>/dev/null || true && \
+    # Remove transformers cache
+    rm -rf /opt/venv/lib/python3.13/site-packages/transformers/.cache 2>/dev/null || true && \
+    # Clean pip cache AFTER installation (saves space, cache already used for speed)
+    pip cache purge 2>/dev/null || true && \
+    # Remove pip build artifacts
+    rm -rf /root/.cache/pip 2>/dev/null || true && \
+    # Final size check
+    du -sh /opt/venv
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2: Production - Minimal runtime image

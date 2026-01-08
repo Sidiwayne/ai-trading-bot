@@ -34,14 +34,11 @@ RUN pip install --upgrade pip wheel && \
     pip install -r /tmp/requirements_no_torch.txt && \
     # Verify PyTorch imports successfully (CPU-only build)
     python -c "import torch; print(f'PyTorch {torch.__version__} installed successfully')" && \
-    # Aggressive cleanup to reduce image size
+    # Conservative cleanup to reduce image size
+    # NOTE: We do NOT remove test directories - many packages (numpy, scipy, sklearn) use internal test modules at runtime
     find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true && \
     find /opt/venv -type f -name "*.pyc" -delete 2>/dev/null || true && \
     find /opt/venv -type f -name "*.pyo" -delete 2>/dev/null || true && \
-    # Remove test files and docs from packages
-    find /opt/venv -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true && \
-    find /opt/venv -type d -name "test" -exec rm -rf {} + 2>/dev/null || true && \
-    find /opt/venv -type d -name "__tests__" -exec rm -rf {} + 2>/dev/null || true && \
     find /opt/venv -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true && \
     # NOTE: Keep *.dist-info directories - they contain package metadata required by importlib.metadata
     # Removing them breaks version checks (e.g., transformers checking for tqdm>=4.27)

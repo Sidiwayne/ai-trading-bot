@@ -112,6 +112,15 @@ class BinanceClient(ExchangeInterface):
         notifier = get_notifier()
         
         if isinstance(e, ccxt.InsufficientFunds):
+            # Log the actual Binance error to understand what's really wrong
+            logger.error(
+                "Binance InsufficientFunds error (may be misleading)",
+                operation=operation,
+                error_message=error_str,
+                note="This might not actually be a balance issue - check Binance error details",
+            )
+            # Try to extract balance info from error if available
+            # CCXT InsufficientFunds might have balance info in the exception
             raise InsufficientBalanceError(0, 0, "USDC")
         elif isinstance(e, ccxt.RateLimitExceeded):
             # Send notification for rate limit errors
@@ -344,6 +353,17 @@ class BinanceClient(ExchangeInterface):
             return result
         
         except Exception as e:
+            # Log the actual error before handling to see what Binance really said
+            logger.error(
+                "Stop loss order placement failed",
+                symbol=symbol,
+                quantity=quantity,
+                stop_price=stop_price,
+                limit_price=limit_price,
+                error_type=type(e).__name__,
+                error_message=str(e),
+                raw_error=repr(e),
+            )
             self._handle_error(e, "stop_loss_order")
     
     def cancel_order(self, symbol: str, order_id: str) -> bool:

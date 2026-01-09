@@ -8,6 +8,7 @@ Handles entry logic with dual stop-loss protection.
 
 from typing import Optional
 from datetime import datetime, timezone
+import time
 
 from src.core.models import FusionDecision, TradeEntry, Position
 from src.core.enums import TradeSide, TradeStatus
@@ -123,6 +124,83 @@ class OrderExecutor:
         balance = self.exchange.get_balance(quote_currency)
         return balance.free
     
+    def _place_stop_loss_with_retry(
+        self,
+        symbol: str,
+        quantity: float,
+        stop_price: float,
+        max_retries: int = 3,
+        initial_delay: float = 1.0,
+    ) -> Optional[str]:
+        """
+        Place stop loss order with retry logic to handle Binance timing issues.
+        
+        Binance needs time to update account balance after a market buy fills.
+        This method retries with exponential backoff if "Insufficient balance" error occurs.
+        
+        Args:
+            symbol: Trading pair (e.g., "BTC/USDC")
+            quantity: Quantity to sell at stop loss
+            stop_price: Stop loss price
+            max_retries: Maximum number of retry attempts
+            initial_delay: Initial delay between retries (seconds)
+        
+        Returns:
+            Stop order ID if successful, None if all retries failed
+        """
+        for attempt in range(max_retries):
+            try:
+                stop_result = self.exchange.stop_loss_order(
+                    symbol=symbol,
+                    quantity=quantity,
+                    stop_price=stop_price,
+                )
+                stop_order_id = stop_result.order_id
+                logger.info(
+                    "Catastrophe stop loss placed",
+                    order_id=stop_order_id,
+                    stop_price=stop_price,
+                    attempt=attempt + 1,
+                )
+                return stop_order_id
+                
+            except InsufficientBalanceError as e:
+                if attempt < max_retries - 1:
+                    # Retry with exponential backoff (Binance balance might still be updating)
+                    wait_time = initial_delay * (2 ** attempt)
+                    logger.warning(
+                        "Stop loss placement failed - retrying",
+                        attempt=attempt + 1,
+                        max_retries=max_retries,
+                        wait_seconds=wait_time,
+                        error=str(e),
+                        note="Binance balance may still be updating after market buy",
+                    )
+                    time.sleep(wait_time)
+                else:
+                    # Final attempt failed - log critical error
+                    logger.error(
+                        "🚨 CRITICAL: Failed to place stop loss after all retries",
+                        symbol=symbol,
+                        quantity=quantity,
+                        stop_price=stop_price,
+                        error=str(e),
+                        note="Position is UNPROTECTED - manual intervention required!",
+                    )
+                    return None
+                    
+            except Exception as e:
+                # Other errors - don't retry, just log and return None
+                logger.error(
+                    "Stop loss placement failed with unexpected error",
+                    symbol=symbol,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+                return None
+        
+        return None
+    
     def _calculate_entry(
         self,
         decision: FusionDecision,
@@ -231,20 +309,20 @@ class OrderExecutor:
                 quantity=buy_result.quantity,
             )
             
-            # Step 2: Place Catastrophe Stop Loss
-            stop_result = self.exchange.stop_loss_order(
+            # Step 2: Wait for Binance balance to update (known timing issue)
+            # Binance needs time to update account balance after market buy fills
+            # Without this delay, stop loss placement fails with "Insufficient balance"
+            logger.debug("Waiting for Binance balance update...")
+            time.sleep(1.5)  # 1.5 seconds should be enough for balance to update
+            
+            # Step 3: Place Catastrophe Stop Loss with retry logic
+            stop_order_id = self._place_stop_loss_with_retry(
                 symbol=symbol,
                 quantity=buy_result.quantity,
                 stop_price=entry.catastrophe_sl,
             )
             
-            logger.info(
-                "Catastrophe stop loss placed",
-                order_id=stop_result.order_id,
-                stop_price=entry.catastrophe_sl,
-            )
-            
-            # Step 3: Record in database
+            # Step 4: Record in database (even if stop loss failed - we need to track the position)
             with get_session() as session:
                 repo = TradeRepository(session)
                 trade = repo.create(
@@ -256,7 +334,7 @@ class OrderExecutor:
                     virtual_tp=entry.virtual_tp,
                     catastrophe_sl=entry.catastrophe_sl,
                     entry_order_id=buy_result.order_id,
-                    exchange_stop_order_id=stop_result.order_id,
+                    exchange_stop_order_id=stop_order_id,  # None if stop loss failed
                     news_id=entry.news_id,
                     reasoning=decision.reasoning,
                 )
@@ -270,7 +348,7 @@ class OrderExecutor:
                     virtual_sl=entry.virtual_sl,
                     virtual_tp=entry.virtual_tp,
                     catastrophe_sl=entry.catastrophe_sl,
-                    exchange_stop_order_id=stop_result.order_id,
+                    exchange_stop_order_id=stop_order_id,  # None if stop loss failed
                     status=TradeStatus.OPEN,
                     opened_at=datetime.now(timezone.utc),
                     news_id=entry.news_id,
@@ -286,6 +364,12 @@ class OrderExecutor:
                         entry_price=buy_result.price,
                         trade_id=trade.id,
                     )
+                    # Send additional warning if stop loss failed
+                    if stop_order_id is None:
+                        notifier.send_system_failure(
+                            component="Stop Loss",
+                            error=f"⚠️ Position {trade.id} ({symbol}) opened but STOP LOSS FAILED to place. Position is UNPROTECTED!",
+                        )
             
             trade_logger.log_entry(
                 symbol=symbol,

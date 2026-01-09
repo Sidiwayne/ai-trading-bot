@@ -71,12 +71,12 @@ class ExchangeInterface(ABC):
     """
     
     @abstractmethod
-    def get_balance(self, currency: str = "USDT") -> Balance:
+    def get_balance(self, currency: str = "USDC") -> Balance:
         """
         Get account balance for a currency.
         
         Args:
-            currency: Currency code (e.g., 'USDT', 'BTC')
+            currency: Currency code (e.g., 'USDC', 'BTC')
         
         Returns:
             Balance object
@@ -89,7 +89,7 @@ class ExchangeInterface(ABC):
         Get current ticker for a symbol.
         
         Args:
-            symbol: Trading pair (e.g., 'BTC/USDT')
+            symbol: Trading pair (e.g., 'BTC/USDC')
         
         Returns:
             Ticker object

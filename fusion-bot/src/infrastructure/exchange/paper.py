@@ -58,7 +58,7 @@ class PaperExchange(ExchangeInterface):
     
     Usage:
         paper = PaperExchange(initial_balance=10000)
-        paper.market_buy("BTC/USDT", 0.1)
+        paper.market_buy("BTC/USDC", 0.1)
     """
     
     def __init__(
@@ -70,14 +70,14 @@ class PaperExchange(ExchangeInterface):
         Initialize paper exchange.
         
         Args:
-            initial_balance: Starting USDT balance
+            initial_balance: Starting USDC balance
             fee_rate: Trading fee rate
         """
         self.initial_balance = initial_balance
         self.fee_rate = fee_rate
         
         # Simulated state
-        self._balances: Dict[str, float] = {"USDT": initial_balance}
+        self._balances: Dict[str, float] = {"USDC": initial_balance}
         self._positions: Dict[str, PaperPosition] = {}
         self._orders: Dict[str, PaperOrder] = {}
         self._trade_history: List[OrderResult] = []
@@ -110,7 +110,7 @@ class PaperExchange(ExchangeInterface):
         """Generate a unique order ID."""
         return f"PAPER-{uuid.uuid4().hex[:12].upper()}"
     
-    def get_balance(self, currency: str = "USDT") -> Balance:
+    def get_balance(self, currency: str = "USDC") -> Balance:
         """Get simulated balance."""
         total = self._balances.get(currency, 0.0)
         return Balance(
@@ -136,7 +136,7 @@ class PaperExchange(ExchangeInterface):
         except Exception as e:
             logger.error(f"Failed to get ticker for {symbol}: {e}")
             # Fallback to mock prices for testing
-            mock_prices = {"BTC/USDT": 95000, "ETH/USDT": 3500}
+            mock_prices = {"BTC/USDC": 95000, "ETH/USDC": 3500}
             price = mock_prices.get(symbol, 100)
             return Ticker(
                 symbol=symbol,
@@ -184,24 +184,24 @@ class PaperExchange(ExchangeInterface):
         total_cost = cost + fee
         
         # Check balance
-        usdt_balance = self._balances.get("USDT", 0)
-        if usdt_balance < total_cost:
+        usdc_balance = self._balances.get("USDC", 0)
+        if usdc_balance < total_cost:
             from src.core.exceptions import InsufficientBalanceError
             logger.warning(
                 "Paper trade rejected: insufficient balance",
                 required=total_cost,
-                available=usdt_balance,
+                available=usdc_balance,
             )
             raise InsufficientBalanceError(
                 required=total_cost,
-                available=usdt_balance,
-                currency="USDT"
+                available=usdc_balance,
+                currency="USDC"
             )
         
         # Execute trade
         base_currency = symbol.split("/")[0]
         
-        self._balances["USDT"] = usdt_balance - total_cost
+        self._balances["USDC"] = usdc_balance - total_cost
         self._balances[base_currency] = self._balances.get(base_currency, 0) + quantity
         
         # Record position
@@ -223,7 +223,7 @@ class PaperExchange(ExchangeInterface):
             status="closed",
             timestamp=datetime.now(timezone.utc),
             fee=fee,
-            fee_currency="USDT",
+            fee_currency="USDC",
         )
         
         self._trade_history.append(result)
@@ -234,7 +234,7 @@ class PaperExchange(ExchangeInterface):
             quantity=quantity,
             price=price,
             cost=total_cost,
-            new_balance=self._balances["USDT"],
+            new_balance=self._balances["USDC"],
         )
         
         return result
@@ -257,7 +257,7 @@ class PaperExchange(ExchangeInterface):
         base_currency = symbol.split("/")[0]
         
         # Execute trade
-        self._balances["USDT"] = self._balances.get("USDT", 0) + net_proceeds
+        self._balances["USDC"] = self._balances.get("USDC", 0) + net_proceeds
         self._balances[base_currency] = max(0, self._balances.get(base_currency, 0) - quantity)
         
         # Clear position if fully sold
@@ -277,7 +277,7 @@ class PaperExchange(ExchangeInterface):
             status="closed",
             timestamp=datetime.now(timezone.utc),
             fee=fee,
-            fee_currency="USDT",
+            fee_currency="USDC",
         )
         
         self._trade_history.append(result)
@@ -288,7 +288,7 @@ class PaperExchange(ExchangeInterface):
             quantity=quantity,
             price=price,
             proceeds=net_proceeds,
-            new_balance=self._balances["USDT"],
+            new_balance=self._balances["USDC"],
         )
         
         return result
@@ -433,8 +433,8 @@ class PaperExchange(ExchangeInterface):
         return triggered
     
     def get_equity(self) -> float:
-        """Get total account equity in USDT."""
-        equity = self._balances.get("USDT", 0)
+        """Get total account equity in USDC."""
+        equity = self._balances.get("USDC", 0)
         
         for symbol, position in self._positions.items():
             try:
@@ -462,7 +462,7 @@ class PaperExchange(ExchangeInterface):
     
     def reset(self) -> None:
         """Reset paper exchange to initial state."""
-        self._balances = {"USDT": self.initial_balance}
+        self._balances = {"USDC": self.initial_balance}
         self._positions.clear()
         self._orders.clear()
         self._trade_history.clear()

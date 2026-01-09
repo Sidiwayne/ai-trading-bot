@@ -86,7 +86,7 @@ def test_market_data():
     # Use paper exchange which fetches real market data
     exchange = PaperExchange()
     
-    symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+    symbols = ["BTC/USDC", "ETH/USDC", "SOL/USDC"]
     
     # Test tickers
     console.print("[bold]Current Prices:[/bold]")
@@ -113,9 +113,9 @@ def test_market_data():
     console.print(table)
     
     # Test OHLCV
-    console.print("\n[bold]OHLCV Data (BTC/USDT 4h, last 5 candles):[/bold]")
+    console.print("\n[bold]OHLCV Data (BTC/USDC 4h, last 5 candles):[/bold]")
     try:
-        candles = exchange.get_ohlcv("BTC/USDT", "4h", 5)
+        candles = exchange.get_ohlcv("BTC/USDC", "4h", 5)
         
         table = Table(show_header=True, header_style="bold magenta")
         table.add_column("Time", style="cyan")
@@ -150,31 +150,31 @@ def test_paper_trading():
     
     exchange = PaperExchange(initial_balance=10000)
     
-    console.print(f"Initial balance: [green]${exchange.get_balance('USDT').total:,.2f}[/green]")
+    console.print(f"Initial balance: [green]${exchange.get_balance('USDC').total:,.2f}[/green]")
     
     # Simulate a buy
     console.print("\nSimulating BTC buy...")
-    result = exchange.market_buy("BTC/USDT", 0.01)
+    result = exchange.market_buy("BTC/USDC", 0.01)
     console.print(f"  Order ID: {result.order_id}")
     console.print(f"  Fill price: ${result.price:,.2f}")
     console.print(f"  Fee: ${result.fee:.4f}")
     
     # Check position
-    position = exchange.get_position("BTC/USDT")
+    position = exchange.get_position("BTC/USDC")
     console.print(f"  Position: {position} BTC")
     
     # Simulate stop loss
     stop_price = result.price * 0.9
-    stop_result = exchange.stop_loss_order("BTC/USDT", 0.01, stop_price)
+    stop_result = exchange.stop_loss_order("BTC/USDC", 0.01, stop_price)
     console.print(f"\nStop loss placed at ${stop_price:,.2f}")
     
     # Check balances
-    console.print(f"\nCurrent USDT: [yellow]${exchange.get_balance('USDT').total:,.2f}[/yellow]")
+    console.print(f"\nCurrent USDC: [yellow]${exchange.get_balance('USDC').total:,.2f}[/yellow]")
     console.print(f"Current BTC: [yellow]{exchange.get_balance('BTC').total:.6f}[/yellow]")
     
     # Simulate sell
     console.print("\nSimulating BTC sell...")
-    sell_result = exchange.market_sell("BTC/USDT", 0.01)
+    sell_result = exchange.market_sell("BTC/USDC", 0.01)
     console.print(f"  Sell price: ${sell_result.price:,.2f}")
     
     # Final P&L

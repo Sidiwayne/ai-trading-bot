@@ -33,7 +33,7 @@ class TechnicalAnalyzer:
     
     Usage:
         analyzer = TechnicalAnalyzer(exchange)
-        signals = analyzer.analyze("BTC/USDT")
+        signals = analyzer.analyze("BTC/USDC")
         
         if signals.is_bullish and not signals.is_overbought:
             # Good entry opportunity

@@ -150,7 +150,7 @@ RESPONSE FORMAT (JSON only)
 
 {{
   "action": "BUY" or "WAIT",
-  "symbol": "BTC/USDT" (if BUY, null if WAIT),
+  "symbol": "BTC/USDC" (if BUY, null if WAIT),
   "headline_id": "abc123" (if BUY, null if WAIT),
   "confidence": 0-100,
   "catalyst_strength": "paradigm_shift" | "significant" | "moderate" | "noise",

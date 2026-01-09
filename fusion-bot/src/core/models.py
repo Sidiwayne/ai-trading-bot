@@ -32,7 +32,7 @@ class NewsItem:
         source: RSS feed source name
         url: Link to full article
         published_at: When the article was published
-        detected_symbol: Trading symbol detected in headline (e.g., "BTC/USDT")
+        detected_symbol: Trading symbol detected in headline (e.g., "BTC/USDC")
         summary: Brief summary if available
     """
     

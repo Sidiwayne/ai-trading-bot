@@ -38,7 +38,7 @@ def test_trade_opened():
         return False
     
     success = notifier.send_trade_opened(
-        symbol="BTC/USDT",
+        symbol="BTC/USDC",
         quantity=0.001,
         entry_price=45000.00,
         trade_id=12345,
@@ -63,7 +63,7 @@ def test_trade_closed():
     
     # Test profitable trade
     success1 = notifier.send_trade_closed(
-        symbol="ETH/USDT",
+        symbol="ETH/USDC",
         quantity=0.1,
         entry_price=2500.00,
         exit_price=2600.00,
@@ -74,7 +74,7 @@ def test_trade_closed():
     
     # Test losing trade
     success2 = notifier.send_trade_closed(
-        symbol="SOL/USDT",
+        symbol="SOL/USDC",
         quantity=1.0,
         entry_price=100.00,
         exit_price=98.00,
@@ -85,7 +85,7 @@ def test_trade_closed():
     
     # Test unknown exit (external close)
     success3 = notifier.send_trade_closed(
-        symbol="BTC/USDT",
+        symbol="BTC/USDC",
         quantity=0.001,
         entry_price=45000.00,
         exit_price=None,
@@ -112,7 +112,7 @@ def test_catastrophe_stop():
         return False
     
     success = notifier.send_catastrophe_stop(
-        symbol="BTC/USDT",
+        symbol="BTC/USDC",
         entry_price=45000.00,
         exit_price=40500.00,  # -10% catastrophe stop
         pnl_percent=-0.10,
@@ -137,7 +137,7 @@ def test_external_close():
         return False
     
     success = notifier.send_external_close(
-        symbol="ETH/USDT",
+        symbol="ETH/USDC",
         quantity=0.1,
         entry_price=2500.00,
         trade_id=12350,

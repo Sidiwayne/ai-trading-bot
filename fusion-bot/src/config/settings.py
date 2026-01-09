@@ -138,7 +138,7 @@ class Settings(BaseSettings):
     
     # === Watchlist ===
     watchlist: str = Field(
-        default="BTC/USDT,ETH/USDT,SOL/USDT",
+        default="BTC/USDC,ETH/USDC,SOL/USDC",
         description="Comma-separated trading pairs"
     )
     

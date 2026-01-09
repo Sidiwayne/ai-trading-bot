@@ -39,9 +39,9 @@ def extract_symbol_from_text(text: str, supported_symbols: dict) -> Optional[str
         Trading symbol if found, None otherwise
     
     Example:
-        >>> supported = {"BTC/USDT": ["bitcoin", "btc"]}
+        >>> supported = {"BTC/USDC": ["bitcoin", "btc"]}
         >>> extract_symbol_from_text("Bitcoin hits new high", supported)
-        "BTC/USDT"
+        "BTC/USDC"
     """
     text_lower = text.lower()
     

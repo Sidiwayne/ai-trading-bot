@@ -69,7 +69,7 @@ class TradeORM(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     
     # Trade Identity
-    symbol = Column(String(20), nullable=False)  # BTC/USDT
+    symbol = Column(String(20), nullable=False)  # BTC/USDC
     side = Column(String(10), nullable=False)    # BUY, SELL
     
     # Entry Details

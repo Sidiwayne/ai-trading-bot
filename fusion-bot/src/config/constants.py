@@ -88,17 +88,17 @@ DANGER_KEYWORDS: List[str] = [
 # ============================================
 
 SUPPORTED_SYMBOLS: Dict[str, List[str]] = {
-    "BTC/USDT": ["bitcoin", "btc", "₿"],
-    "ETH/USDT": ["ethereum", "eth", "ether"],
-    "SOL/USDT": ["solana", "sol"],
-    "SOL/USDT": ["solana", "sol"],
-    "XRP/USDT": ["ripple", "xrp"],
-    "ADA/USDT": ["cardano", "ada"],
-    "AVAX/USDT": ["avalanche", "avax"],
-    "DOT/USDT": ["polkadot", "dot"],
-    "LINK/USDT": ["chainlink", "link"],
-    "MATIC/USDT": ["polygon", "matic"],
-    "ATOM/USDT": ["cosmos", "atom"],
+    "BTC/USDC": ["bitcoin", "btc", "₿"],
+    "ETH/USDC": ["ethereum", "eth", "ether"],
+    "SOL/USDC": ["solana", "sol"],
+    "SOL/USDC": ["solana", "sol"],
+    "XRP/USDC": ["ripple", "xrp"],
+    "ADA/USDC": ["cardano", "ada"],
+    "AVAX/USDC": ["avalanche", "avax"],
+    "DOT/USDC": ["polkadot", "dot"],
+    "LINK/USDC": ["chainlink", "link"],
+    "MATIC/USDC": ["polygon", "matic"],
+    "ATOM/USDC": ["cosmos", "atom"],
 }
 
 # ============================================
@@ -148,6 +148,6 @@ RETRY_CONFIG = {
 HEALTH_THRESHOLDS = {
     "max_api_latency_ms": 5000,
     "max_heartbeat_age_seconds": 30,
-    "min_account_balance_usdt": 10,
+    "min_account_balance_usdc": 10,
 }
 

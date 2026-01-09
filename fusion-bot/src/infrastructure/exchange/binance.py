@@ -40,7 +40,7 @@ class BinanceClient(ExchangeInterface):
     
     Usage:
         client = BinanceClient(api_key, api_secret, testnet=True)
-        ticker = client.get_ticker("BTC/USDT")
+        ticker = client.get_ticker("BTC/USDC")
     """
     
     def __init__(
@@ -112,7 +112,7 @@ class BinanceClient(ExchangeInterface):
         notifier = get_notifier()
         
         if isinstance(e, ccxt.InsufficientFunds):
-            raise InsufficientBalanceError(0, 0, "USDT")
+            raise InsufficientBalanceError(0, 0, "USDC")
         elif isinstance(e, ccxt.RateLimitExceeded):
             # Send notification for rate limit errors
             if notifier:
@@ -155,7 +155,7 @@ class BinanceClient(ExchangeInterface):
             raise ExchangeError(f"Unexpected error in {operation}: {error_str}")
     
     @with_retry(RetryConfig(max_attempts=3))
-    def get_balance(self, currency: str = "USDT") -> Balance:
+    def get_balance(self, currency: str = "USDC") -> Balance:
         """Get account balance."""
         try:
             balance = self.exchange.fetch_balance()
@@ -404,7 +404,7 @@ class BinanceClient(ExchangeInterface):
     def get_position(self, symbol: str) -> Optional[float]:
         """Get current position size (balance of base currency)."""
         try:
-            # Extract base currency from symbol (e.g., BTC from BTC/USDT)
+            # Extract base currency from symbol (e.g., BTC from BTC/USDC)
             base = symbol.split("/")[0]
             balance = self.get_balance(base)
             

@@ -39,7 +39,7 @@ def check_order_history(exchange: ccxt.binance, symbol: str = None, limit: int =
         # Binance requires symbol for fetch_orders
         if not symbol:
             # Check common symbols
-            symbols_to_check = ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+            symbols_to_check = ["BTC/USDC", "ETH/USDC", "SOL/USDC"]
             all_orders = []
             for sym in symbols_to_check:
                 try:
@@ -100,7 +100,7 @@ def check_trade_history(exchange: ccxt.binance, symbol: str = None, limit: int =
         # Binance requires symbol for fetch_my_trades
         if not symbol:
             # Check common symbols
-            symbols_to_check = ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+            symbols_to_check = ["BTC/USDC", "ETH/USDC", "SOL/USDC"]
             all_trades = []
             for sym in symbols_to_check:
                 try:
@@ -190,7 +190,7 @@ def check_open_orders(exchange: ccxt.binance, symbol: str = None):
             orders = exchange.fetch_open_orders(symbol)
         else:
             # Check common symbols
-            symbols_to_check = ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+            symbols_to_check = ["BTC/USDC", "ETH/USDC", "SOL/USDC"]
             all_orders = []
             for sym in symbols_to_check:
                 try:
@@ -265,15 +265,15 @@ def check_balances(exchange: ccxt.binance):
         balance = exchange.fetch_balance()
         settings = get_settings()
         
-        # Get watchlist base currencies (e.g., "BTC/USDT" -> "BTC")
+        # Get watchlist base currencies (e.g., "BTC/USDC" -> "BTC")
         watchlist_symbols = settings.watchlist_symbols
         watchlist_currencies = set()
         for symbol in watchlist_symbols:
             base = symbol.split("/")[0]
             watchlist_currencies.add(base)
         
-        # Only show USDT and watchlist currencies
-        currencies_to_show = ["USDT"] + sorted(watchlist_currencies)
+        # Only show USDC and watchlist currencies
+        currencies_to_show = ["USDC"] + sorted(watchlist_currencies)
         
         table = Table(box=box.ROUNDED)
         table.add_column("Currency", style="cyan")
@@ -296,7 +296,7 @@ def check_balances(exchange: ccxt.binance):
                     free = total
                     used = 0
                 
-                # Always show USDT and watchlist currencies, even if 0
+                # Always show USDC and watchlist currencies, even if 0
                 table.add_row(
                     currency,
                     f"{free:.8f}".rstrip("0").rstrip("."),
@@ -367,7 +367,7 @@ def main():
     import sys
     if len(sys.argv) > 1:
         order_id = sys.argv[1]
-        symbol = sys.argv[2] if len(sys.argv) > 2 else "BTC/USDT"
+        symbol = sys.argv[2] if len(sys.argv) > 2 else "BTC/USDC"
         check_specific_order(exchange, order_id, symbol)
         return
     
@@ -379,7 +379,7 @@ def main():
     
     console.print("\n[bold]💡 Tips:[/bold]")
     console.print("  - Check specific order: python scripts/check_binance_history.py <order_id> <symbol>")
-    console.print("  - Example: python scripts/check_binance_history.py 102023 BTC/USDT")
+    console.print("  - Example: python scripts/check_binance_history.py 102023 BTC/USDC")
 
 
 if __name__ == "__main__":

@@ -127,7 +127,7 @@ def get_logger(name: str) -> structlog.stdlib.BoundLogger:
     
     Usage:
         logger = get_logger(__name__)
-        logger.info("Trade executed", symbol="BTC/USDT", price=50000)
+        logger.info("Trade executed", symbol="BTC/USDC", price=50000)
     """
     return structlog.get_logger(name)
 
